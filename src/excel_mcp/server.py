@@ -706,11 +706,14 @@ def run_streamable_http():
     finally:
         logger.info("Server shutdown complete")
 
-def run_stdio():
+def run_stdio(excel_files_path: str | None = None):
     """Run Excel MCP server in stdio mode."""
     # No need to assign EXCEL_FILES_PATH in stdio mode
     
     try:
+        if excel_files_path is not None:
+            global EXCEL_FILES_PATH
+            EXCEL_FILES_PATH = excel_files_path
         logger.info("Starting Excel MCP server with stdio transport")
         mcp.run(transport="stdio")
     except KeyboardInterrupt:
