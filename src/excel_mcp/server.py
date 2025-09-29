@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import Any, List, Dict, Optional
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
@@ -13,13 +14,13 @@ from excel_mcp.exceptions import (
     FormattingError,
     CalculationError,
     PivotError,
-    ChartError
+    ChartError,
 )
 
 # Import from excel_mcp package with consistent _impl suffixes
 from excel_mcp.validation import (
     validate_formula_in_cell_operation as validate_formula_impl,
-    validate_range_in_sheet_operation as validate_range_impl
+    validate_range_in_sheet_operation as validate_range_impl,
 )
 from excel_mcp.chart import create_chart_in_sheet as create_chart_impl
 from excel_mcp.workbook import get_workbook_info
@@ -68,15 +69,16 @@ mcp = FastMCP(
     "excel-mcp",
     host=os.environ.get("FASTMCP_HOST", "0.0.0.0"),
     port=int(os.environ.get("FASTMCP_PORT", "8017")),
-    instructions="Excel MCP Server for manipulating Excel files"
+    instructions="Excel MCP Server for manipulating Excel files",
 )
+
 
 def get_excel_path(filename: str) -> str:
     """Get full path to Excel file.
-    
+
     Args:
         filename: Name of Excel file
-        
+
     Returns:
         Full path to Excel file
     """
@@ -87,10 +89,13 @@ def get_excel_path(filename: str) -> str:
     # Check if in SSE mode (EXCEL_FILES_PATH is not None)
     if EXCEL_FILES_PATH is None:
         # Must use absolute path
-        raise ValueError(f"Invalid filename: {filename}, must be an absolute path when not in SSE mode")
+        raise ValueError(
+            f"Invalid filename: {filename}, must be an absolute path when not in SSE mode"
+        )
 
     # In SSE mode, if it's a relative path, resolve it based on EXCEL_FILES_PATH
     return os.path.join(EXCEL_FILES_PATH, filename)
+
 
 @mcp.tool()
 def apply_formula(
@@ -109,9 +114,10 @@ def apply_formula(
         validation = validate_formula_impl(full_path, sheet_name, cell, formula)
         if isinstance(validation, dict) and "error" in validation:
             return f"Error: {validation['error']}"
-            
+
         # If valid, apply the formula
         from excel_mcp.calculations import apply_formula as apply_formula_impl
+
         result = apply_formula_impl(full_path, sheet_name, cell, formula)
         return result["message"]
     except (ValidationError, CalculationError) as e:
@@ -119,6 +125,7 @@ def apply_formula(
     except Exception as e:
         logger.error(f"Error applying formula: {e}")
         raise
+
 
 @mcp.tool()
 def validate_formula_syntax(
@@ -137,6 +144,7 @@ def validate_formula_syntax(
     except Exception as e:
         logger.error(f"Error validating formula: {e}")
         raise
+
 
 @mcp.tool()
 def format_range(
@@ -157,13 +165,13 @@ def format_range(
     wrap_text: bool = False,
     merge_cells: bool = False,
     protection: Optional[Dict[str, Any]] = None,
-    conditional_format: Optional[Dict[str, Any]] = None
+    conditional_format: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Apply formatting to a range of cells."""
     try:
         full_path = get_excel_path(filepath)
         from excel_mcp.formatting import format_range as format_range_func
-        
+
         # Convert None values to appropriate defaults for the underlying function
         format_range_func(
             filepath=full_path,
@@ -183,7 +191,7 @@ def format_range(
             wrap_text=wrap_text,
             merge_cells=merge_cells,
             protection=protection,  # This can be None
-            conditional_format=conditional_format  # This can be None
+            conditional_format=conditional_format,  # This can be None
         )
         return "Range formatted successfully"
     except (ValidationError, FormattingError) as e:
@@ -192,47 +200,48 @@ def format_range(
         logger.error(f"Error formatting range: {e}")
         raise
 
+
 @mcp.tool()
 def read_data_from_excel(
     filepath: str,
     sheet_name: str,
     start_cell: str = "A1",
     end_cell: Optional[str] = None,
-    preview_only: bool = False
+    preview_only: bool = False,
 ) -> str:
     """
     Read data from Excel worksheet with cell metadata including validation rules.
-    
+
     Args:
         filepath: Path to Excel file
         sheet_name: Name of worksheet
         start_cell: Starting cell (default A1)
         end_cell: Ending cell (optional, auto-expands if not provided)
         preview_only: Whether to return preview only
-    
-    Returns:  
+
+    Returns:
     JSON string containing structured cell data with validation metadata.
     Each cell includes: address, value, row, column, and validation info (if any).
     """
     try:
         full_path = get_excel_path(filepath)
         from excel_mcp.data import read_excel_range_with_metadata
+
         result = read_excel_range_with_metadata(
-            full_path, 
-            sheet_name, 
-            start_cell, 
-            end_cell
+            full_path, sheet_name, start_cell, end_cell
         )
         if not result or not result.get("cells"):
             return "No data found in specified range"
-            
+
         # Return as formatted JSON string
         import json
+
         return json.dumps(result, indent=2, default=str)
-        
+
     except Exception as e:
         logger.error(f"Error reading data: {e}")
         raise
+
 
 @mcp.tool()
 def write_data_to_excel(
@@ -245,12 +254,12 @@ def write_data_to_excel(
     Write data to Excel worksheet.
     Excel formula will write to cell without any verification.
 
-    PARAMETERS:  
+    PARAMETERS:
     filepath: Path to Excel file
     sheet_name: Name of worksheet to write to
     data: List of lists containing data to write to the worksheet, sublists are assumed to be rows
     start_cell: Cell to start writing to, default is "A1"
-  
+
     """
     try:
         full_path = get_excel_path(filepath)
@@ -262,12 +271,14 @@ def write_data_to_excel(
         logger.error(f"Error writing data: {e}")
         raise
 
+
 @mcp.tool()
 def create_workbook(filepath: str) -> str:
     """Create new Excel workbook."""
     try:
         full_path = get_excel_path(filepath)
         from excel_mcp.workbook import create_workbook as create_workbook_impl
+
         create_workbook_impl(full_path)
         return f"Created workbook at {full_path}"
     except WorkbookError as e:
@@ -276,12 +287,14 @@ def create_workbook(filepath: str) -> str:
         logger.error(f"Error creating workbook: {e}")
         raise
 
+
 @mcp.tool()
 def create_worksheet(filepath: str, sheet_name: str) -> str:
     """Create new worksheet in workbook."""
     try:
         full_path = get_excel_path(filepath)
         from excel_mcp.workbook import create_sheet as create_worksheet_impl
+
         result = create_worksheet_impl(full_path, sheet_name)
         return result["message"]
     except (ValidationError, WorkbookError) as e:
@@ -289,6 +302,7 @@ def create_worksheet(filepath: str, sheet_name: str) -> str:
     except Exception as e:
         logger.error(f"Error creating worksheet: {e}")
         raise
+
 
 @mcp.tool()
 def create_chart(
@@ -299,7 +313,7 @@ def create_chart(
     target_cell: str,
     title: str = "",
     x_axis: str = "",
-    y_axis: str = ""
+    y_axis: str = "",
 ) -> str:
     """Create chart in worksheet."""
     try:
@@ -312,7 +326,7 @@ def create_chart(
             target_cell=target_cell,
             title=title,
             x_axis=x_axis,
-            y_axis=y_axis
+            y_axis=y_axis,
         )
         return result["message"]
     except (ValidationError, ChartError) as e:
@@ -320,6 +334,7 @@ def create_chart(
     except Exception as e:
         logger.error(f"Error creating chart: {e}")
         raise
+
 
 @mcp.tool()
 def create_pivot_table(
@@ -329,7 +344,7 @@ def create_pivot_table(
     rows: List[str],
     values: List[str],
     columns: Optional[List[str]] = None,
-    agg_func: str = "mean"
+    agg_func: str = "mean",
 ) -> str:
     """Create pivot table in worksheet."""
     try:
@@ -341,7 +356,7 @@ def create_pivot_table(
             rows=rows,
             values=values,
             columns=columns or [],
-            agg_func=agg_func
+            agg_func=agg_func,
         )
         return result["message"]
     except (ValidationError, PivotError) as e:
@@ -350,13 +365,14 @@ def create_pivot_table(
         logger.error(f"Error creating pivot table: {e}")
         raise
 
+
 @mcp.tool()
 def create_table(
     filepath: str,
     sheet_name: str,
     data_range: str,
     table_name: Optional[str] = None,
-    table_style: str = "TableStyleMedium9"
+    table_style: str = "TableStyleMedium9",
 ) -> str:
     """Creates a native Excel table from a specified range of data."""
     try:
@@ -366,7 +382,7 @@ def create_table(
             sheet_name=sheet_name,
             data_range=data_range,
             table_name=table_name,
-            table_style=table_style
+            table_style=table_style,
         )
         return result["message"]
     except DataError as e:
@@ -375,12 +391,9 @@ def create_table(
         logger.error(f"Error creating table: {e}")
         raise
 
+
 @mcp.tool()
-def copy_worksheet(
-    filepath: str,
-    source_sheet: str,
-    target_sheet: str
-) -> str:
+def copy_worksheet(filepath: str, source_sheet: str, target_sheet: str) -> str:
     """Copy worksheet within workbook."""
     try:
         full_path = get_excel_path(filepath)
@@ -392,11 +405,9 @@ def copy_worksheet(
         logger.error(f"Error copying worksheet: {e}")
         raise
 
+
 @mcp.tool()
-def delete_worksheet(
-    filepath: str,
-    sheet_name: str
-) -> str:
+def delete_worksheet(filepath: str, sheet_name: str) -> str:
     """Delete worksheet from workbook."""
     try:
         full_path = get_excel_path(filepath)
@@ -408,12 +419,9 @@ def delete_worksheet(
         logger.error(f"Error deleting worksheet: {e}")
         raise
 
+
 @mcp.tool()
-def rename_worksheet(
-    filepath: str,
-    old_name: str,
-    new_name: str
-) -> str:
+def rename_worksheet(filepath: str, old_name: str, new_name: str) -> str:
     """Rename worksheet in workbook."""
     try:
         full_path = get_excel_path(filepath)
@@ -425,11 +433,9 @@ def rename_worksheet(
         logger.error(f"Error renaming worksheet: {e}")
         raise
 
+
 @mcp.tool()
-def get_workbook_metadata(
-    filepath: str,
-    include_ranges: bool = False
-) -> str:
+def get_workbook_metadata(filepath: str, include_ranges: bool = False) -> str:
     """Get metadata about workbook including sheets, ranges, etc."""
     try:
         full_path = get_excel_path(filepath)
@@ -440,6 +446,7 @@ def get_workbook_metadata(
     except Exception as e:
         logger.error(f"Error getting workbook metadata: {e}")
         raise
+
 
 @mcp.tool()
 def merge_cells(filepath: str, sheet_name: str, start_cell: str, end_cell: str) -> str:
@@ -454,8 +461,11 @@ def merge_cells(filepath: str, sheet_name: str, start_cell: str, end_cell: str) 
         logger.error(f"Error merging cells: {e}")
         raise
 
+
 @mcp.tool()
-def unmerge_cells(filepath: str, sheet_name: str, start_cell: str, end_cell: str) -> str:
+def unmerge_cells(
+    filepath: str, sheet_name: str, start_cell: str, end_cell: str
+) -> str:
     """Unmerge a range of cells."""
     try:
         full_path = get_excel_path(filepath)
@@ -466,6 +476,7 @@ def unmerge_cells(filepath: str, sheet_name: str, start_cell: str, end_cell: str
     except Exception as e:
         logger.error(f"Error unmerging cells: {e}")
         raise
+
 
 @mcp.tool()
 def get_merged_cells(filepath: str, sheet_name: str) -> str:
@@ -479,6 +490,7 @@ def get_merged_cells(filepath: str, sheet_name: str) -> str:
         logger.error(f"Error getting merged cells: {e}")
         raise
 
+
 @mcp.tool()
 def copy_range(
     filepath: str,
@@ -486,19 +498,20 @@ def copy_range(
     source_start: str,
     source_end: str,
     target_start: str,
-    target_sheet: Optional[str] = None
+    target_sheet: Optional[str] = None,
 ) -> str:
     """Copy a range of cells to another location."""
     try:
         full_path = get_excel_path(filepath)
         from excel_mcp.sheet import copy_range_operation
+
         result = copy_range_operation(
             full_path,
             sheet_name,
             source_start,
             source_end,
             target_start,
-            target_sheet or sheet_name  # Use source sheet if target_sheet is None
+            target_sheet or sheet_name,  # Use source sheet if target_sheet is None
         )
         return result["message"]
     except (ValidationError, SheetError) as e:
@@ -507,24 +520,22 @@ def copy_range(
         logger.error(f"Error copying range: {e}")
         raise
 
+
 @mcp.tool()
 def delete_range(
     filepath: str,
     sheet_name: str,
     start_cell: str,
     end_cell: str,
-    shift_direction: str = "up"
+    shift_direction: str = "up",
 ) -> str:
     """Delete a range of cells and shift remaining cells."""
     try:
         full_path = get_excel_path(filepath)
         from excel_mcp.sheet import delete_range_operation
+
         result = delete_range_operation(
-            full_path,
-            sheet_name,
-            start_cell,
-            end_cell,
-            shift_direction
+            full_path, sheet_name, start_cell, end_cell, shift_direction
         )
         return result["message"]
     except (ValidationError, SheetError) as e:
@@ -533,12 +544,10 @@ def delete_range(
         logger.error(f"Error deleting range: {e}")
         raise
 
+
 @mcp.tool()
 def validate_excel_range(
-    filepath: str,
-    sheet_name: str,
-    start_cell: str,
-    end_cell: Optional[str] = None
+    filepath: str, sheet_name: str, start_cell: str, end_cell: Optional[str] = None
 ) -> str:
     """Validate if a range exists and is properly formatted."""
     try:
@@ -552,21 +561,19 @@ def validate_excel_range(
         logger.error(f"Error validating range: {e}")
         raise
 
+
 @mcp.tool()
-def get_data_validation_info(
-    filepath: str,
-    sheet_name: str
-) -> str:
+def get_data_validation_info(filepath: str, sheet_name: str) -> str:
     """
     Get all data validation rules in a worksheet.
-    
+
     This tool helps identify which cell ranges have validation rules
     and what types of validation are applied.
-    
+
     Args:
         filepath: Path to Excel file
         sheet_name: Name of worksheet
-        
+
     Returns:
         JSON string containing all validation rules in the worksheet
     """
@@ -574,35 +581,33 @@ def get_data_validation_info(
         full_path = get_excel_path(filepath)
         from openpyxl import load_workbook
         from excel_mcp.cell_validation import get_all_validation_ranges
-        
+
         wb = load_workbook(full_path, read_only=False)
         if sheet_name not in wb.sheetnames:
             return f"Error: Sheet '{sheet_name}' not found"
-            
+
         ws = wb[sheet_name]
         validations = get_all_validation_ranges(ws)
         wb.close()
-        
+
         if not validations:
             return "No data validation rules found in this worksheet"
-            
+
         import json
-        return json.dumps({
-            "sheet_name": sheet_name,
-            "validation_rules": validations
-        }, indent=2, default=str)
-        
+
+        return json.dumps(
+            {"sheet_name": sheet_name, "validation_rules": validations},
+            indent=2,
+            default=str,
+        )
+
     except Exception as e:
         logger.error(f"Error getting validation info: {e}")
         raise
 
+
 @mcp.tool()
-def insert_rows(
-    filepath: str,
-    sheet_name: str,
-    start_row: int,
-    count: int = 1
-) -> str:
+def insert_rows(filepath: str, sheet_name: str, start_row: int, count: int = 1) -> str:
     """Insert one or more rows starting at the specified row."""
     try:
         full_path = get_excel_path(filepath)
@@ -614,12 +619,10 @@ def insert_rows(
         logger.error(f"Error inserting rows: {e}")
         raise
 
+
 @mcp.tool()
 def insert_columns(
-    filepath: str,
-    sheet_name: str,
-    start_col: int,
-    count: int = 1
+    filepath: str, sheet_name: str, start_col: int, count: int = 1
 ) -> str:
     """Insert one or more columns starting at the specified column."""
     try:
@@ -632,12 +635,10 @@ def insert_columns(
         logger.error(f"Error inserting columns: {e}")
         raise
 
+
 @mcp.tool()
 def delete_sheet_rows(
-    filepath: str,
-    sheet_name: str,
-    start_row: int,
-    count: int = 1
+    filepath: str, sheet_name: str, start_row: int, count: int = 1
 ) -> str:
     """Delete one or more rows starting at the specified row."""
     try:
@@ -650,12 +651,10 @@ def delete_sheet_rows(
         logger.error(f"Error deleting rows: {e}")
         raise
 
+
 @mcp.tool()
 def delete_sheet_columns(
-    filepath: str,
-    sheet_name: str,
-    start_col: int,
-    count: int = 1
+    filepath: str, sheet_name: str, start_col: int, count: int = 1
 ) -> str:
     """Delete one or more columns starting at the specified column."""
     try:
@@ -668,6 +667,7 @@ def delete_sheet_columns(
         logger.error(f"Error deleting columns: {e}")
         raise
 
+
 def run_sse():
     """Run Excel MCP server in SSE mode."""
     # Assign value to EXCEL_FILES_PATH in SSE mode
@@ -675,9 +675,11 @@ def run_sse():
     EXCEL_FILES_PATH = os.environ.get("EXCEL_FILES_PATH", "./excel_files")
     # Create directory if it doesn't exist
     os.makedirs(EXCEL_FILES_PATH, exist_ok=True)
-    
+
     try:
-        logger.info(f"Starting Excel MCP server with SSE transport (files directory: {EXCEL_FILES_PATH})")
+        logger.info(
+            f"Starting Excel MCP server with SSE transport (files directory: {EXCEL_FILES_PATH})"
+        )
         mcp.run(transport="sse")
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
@@ -687,6 +689,7 @@ def run_sse():
     finally:
         logger.info("Server shutdown complete")
 
+
 def run_streamable_http():
     """Run Excel MCP server in streamable HTTP mode."""
     # Assign value to EXCEL_FILES_PATH in streamable HTTP mode
@@ -694,9 +697,11 @@ def run_streamable_http():
     EXCEL_FILES_PATH = os.environ.get("EXCEL_FILES_PATH", "./excel_files")
     # Create directory if it doesn't exist
     os.makedirs(EXCEL_FILES_PATH, exist_ok=True)
-    
+
     try:
-        logger.info(f"Starting Excel MCP server with streamable HTTP transport (files directory: {EXCEL_FILES_PATH})")
+        logger.info(
+            f"Starting Excel MCP server with streamable HTTP transport (files directory: {EXCEL_FILES_PATH})"
+        )
         mcp.run(transport="streamable-http")
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
@@ -706,10 +711,11 @@ def run_streamable_http():
     finally:
         logger.info("Server shutdown complete")
 
-def run_stdio(excel_files_path: str | None = None):
+
+def run_stdio(excel_files_path: Path | None = None):
     """Run Excel MCP server in stdio mode."""
     # No need to assign EXCEL_FILES_PATH in stdio mode
-    
+
     try:
         if excel_files_path is not None:
             global EXCEL_FILES_PATH
